@@ -207,11 +207,22 @@ jobs:
   GPU:
     if: github.repository == 'ultralytics/ultralytics' && (github.event_name != 'workflow_dispatch' || github.event.inputs.gpu == 'true')
     timeout-minutes: 60
-    runs-on: gpu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [gpu-latest, github-windows11-gpu-t4-4-core, github-linux-gpu-t4-4-core]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip" # caching pip dependencies
       - name: Install requirements
-        run: pip install -e .
+        shell: bash # for Windows compatibility
+        run: |
+          python -m pip install --upgrade pip wheel
+          pip install -e . pytest "pytest-cov" "coverage[toml]"
       - name: Check environment
         run: |
           yolo checks
