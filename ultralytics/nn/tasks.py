@@ -70,6 +70,8 @@ try:
 except ImportError:
     thop = None
 
+YAML_MODS = r"((-pose|-seg|-obb|-ghost|-rtdetr|-world(v\d)?|(-cls-resnet\d{2,3})|-cls)?(-p\d{1})?)?"
+
 
 class BaseModel(nn.Module):
     """The BaseModel class serves as a base class for all the models in the Ultralytics YOLO family."""
@@ -851,7 +853,10 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         LOGGER.info(f"\n{'':>3}{'from':>20}{'n':>3}{'params':>10}  {'module':<45}{'arguments':<30}")
     ch = [ch]
     layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
-    for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
+    ordered_layers = yaml_stack(d)
+    for i, (f, n, m, args) in enumerate(
+        ordered_layers if any(ordered_layers) else (d["backbone"] + d["head"])
+    ):  # from, number, module, args
         m = getattr(torch.nn, m[3:]) if "nn." in m else globals()[m]  # get module
         for j, a in enumerate(args):
             if isinstance(a, str):
@@ -952,11 +957,14 @@ def yaml_model_load(path):
         LOGGER.warning(f"WARNING ⚠️ Ultralytics YOLO P6 models now use -p6 suffix. Renaming {path.stem} to {new_stem}.")
         path = path.with_name(new_stem + path.suffix)
 
-    unified_path = re.sub(r"(\d+)([nslmx])(.+)?$", r"\1\3", str(path))  # i.e. yolov8x.yaml -> yolov8.yaml
+    unified_path = re.sub(rf"(\d+)([nslmx]|-tiny|-spp)?{YAML_MODS}(.+)?$", r"\1\8", str(path))
     yaml_file = check_yaml(unified_path, hard=False) or check_yaml(path)
-    d = yaml_load(yaml_file)  # model dict
+    d = yaml_load(yaml_file, append_filename=True)  # model dict
     d["scale"] = guess_model_scale(path)
-    d["yaml_file"] = str(path)
+    d["model_key"] = re.sub(r"(\d+)([nslmx])(.+)?$", r"\1\3", path.stem)
+    d["task"] = d.get(d["model_key"], {}).get("task")
+    if d.get("task") == "classify":
+        d["nc"] = d.get(d["model_key"]).pop("nc")
     return d
 
 
@@ -995,7 +1003,7 @@ def guess_model_task(model):
 
     def cfg2task(cfg):
         """Guess from YAML dictionary."""
-        m = cfg["head"][-1][-2].lower()  # output module name
+        m = cfg.get("task") or cfg["head"][-1][-2].lower()  # output module name
         if m in {"classify", "classifier", "cls", "fc"}:
             return "classify"
         if m == "detect":
@@ -1053,3 +1061,11 @@ def guess_model_task(model):
         "Explicitly define task for your model, i.e. 'task=detect', 'segment', 'classify','pose' or 'obb'."
     )
     return "detect"  # assume detect
+
+
+def yaml_stack(m_dict: dict, model_key: str = ""):
+    """Stack a model YAML dictionary into a sorted list of model layers."""
+    model_key = model_key or m_dict.get("model_key", "")
+    model_cfg = m_dict.get(model_key, {})
+    _ = model_cfg.pop("task") if "task" in model_cfg else None
+    return [model_cfg.get(k) for k in sorted(model_cfg.keys())]
