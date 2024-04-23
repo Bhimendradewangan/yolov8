@@ -70,6 +70,39 @@ Export a YOLOv8n model to a different format like ONNX or TensorRT. See Argument
         yolo export model=path/to/best.pt format=onnx  # export custom trained model
         ```
 
+
+Export a YOLOv8n model to TensorRT INT8 format format. See Arguments section below for a full list of export arguments.
+
+1. prepare the calibration dataset, your own training dataset is the best or [coco 2017](http://images.cocodataset.org/zips/val2017.zip) and unzip. the number of calibration dataset should be larger than 600.
+
+2. INT8: int8=True
+
+!!! Example
+
+    === "Python"
+
+        ```python
+        from ultralytics import YOLO
+
+        # Load a model
+        model = YOLO('yolov8n.pt')  # load an official model
+        model = YOLO('path/to/best.pt')  # load a custom trained model
+
+        # Export the model
+        calib_input = r'E:\val2017'
+        calib_input = "your training dataset images directory"
+        imgsz = 640
+        model.export(format=r"engine", source = calib_input, calib_batch=20, 
+                     simplify=True, int8=True,
+                     imgsz=imgsz) # INT8
+        ```
+    === "CLI"
+
+        ```bash
+        yolo export model=yolov8n.pt format=engine source='E:\val2017' calib_batch=20 int8=True # export official model to INT8
+        yolo export model=path/to/best.pt format=engine source="your training dataset images directory" calib_batch=20 int8=True # export custom trained model to INT8
+        ```
+
 ## Arguments
 
 This table details the configurations and options available for exporting YOLO models to different formats. These settings are critical for optimizing the exported model's performance, size, and compatibility across various platforms and environments. Proper configuration ensures that the model is ready for deployment in the intended application with optimal efficiency.
@@ -82,6 +115,7 @@ This table details the configurations and options available for exporting YOLO m
 | `optimize`  | `bool`           | `False`         | Applies optimization for mobile devices when exporting to TorchScript, potentially reducing model size and improving performance.                                |
 | `half`      | `bool`           | `False`         | Enables FP16 (half-precision) quantization, reducing model size and potentially speeding up inference on supported hardware.                                     |
 | `int8`      | `bool`           | `False`         | Activates INT8 quantization, further compressing the model and speeding up inference with minimal accuracy loss, primarily for edge devices.                     |
+| `calib_batch`      | `int`           | `20`         | when using INT8 quantization in tensorrt, determinate the calibration images batch size, not the onnx input batch.                     |
 | `dynamic`   | `bool`           | `False`         | Allows dynamic input sizes for ONNX and TensorRT exports, enhancing flexibility in handling varying image dimensions.                                            |
 | `simplify`  | `bool`           | `False`         | Simplifies the model graph for ONNX exports, potentially improving performance and compatibility.                                                                |
 | `opset`     | `int`            | `None`          | Specifies the ONNX opset version for compatibility with different ONNX parsers and runtimes. If not set, uses the latest supported version.                      |
@@ -100,7 +134,7 @@ Available YOLOv8 export formats are in the table below. You can export to any fo
 | [TorchScript](https://pytorch.org/docs/stable/jit.html)            | `torchscript`     | `yolov8n.torchscript`     | ✅        | `imgsz`, `optimize`                                 |
 | [ONNX](https://onnx.ai/)                                           | `onnx`            | `yolov8n.onnx`            | ✅        | `imgsz`, `half`, `dynamic`, `simplify`, `opset`     |
 | [OpenVINO](../integrations/openvino.md)                            | `openvino`        | `yolov8n_openvino_model/` | ✅        | `imgsz`, `half`, `int8`                             |
-| [TensorRT](https://developer.nvidia.com/tensorrt)                  | `engine`          | `yolov8n.engine`          | ✅        | `imgsz`, `half`, `dynamic`, `simplify`, `workspace` |
+| [TensorRT](https://developer.nvidia.com/tensorrt)                  | `engine`          | `yolov8n.engine`          | ✅        | `imgsz`, `half`, `int8`, `calib_batch`, `batch`, `dynamic`, `simplify`, `workspace` |
 | [CoreML](https://github.com/apple/coremltools)                     | `coreml`          | `yolov8n.mlpackage`       | ✅        | `imgsz`, `half`, `int8`, `nms`                      |
 | [TF SavedModel](https://www.tensorflow.org/guide/saved_model)      | `saved_model`     | `yolov8n_saved_model/`    | ✅        | `imgsz`, `keras`, `int8`                            |
 | [TF GraphDef](https://www.tensorflow.org/api_docs/python/tf/Graph) | `pb`              | `yolov8n.pb`              | ❌        | `imgsz`                                             |

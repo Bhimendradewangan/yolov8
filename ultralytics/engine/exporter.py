@@ -708,9 +708,25 @@ class Exporter:
             config.add_optimization_profile(profile)
 
         half = builder.platform_has_fast_fp16 and self.args.half
-        LOGGER.info(f"{prefix} building FP{16 if half else 32} engine as {f}")
+        int8 = builder.platform_has_fast_int8 and self.args.int8
+        if half and int8:
+            raise NotImplementedError(f"Can not {prefix} building FP16 and INT8 engine in the same time")
         if half:
+            LOGGER.info(f"{prefix} building FP16 engine as {f}")
             config.set_flag(trt.BuilderFlag.FP16)
+        if int8:
+            # https://github.com/NVIDIA/TensorRT/tree/main/samples/python/efficientdet
+            LOGGER.info(f"{prefix} building INT8 engine as {f}")
+            from ultralytics.nn.calibrator import EngineCalibrator
+
+            """
+            https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/#enable_int8_c
+            To avoid this issue, calibrate with as large a single batch as possible, 
+            and ensure that calibration batches are well randomized and have similar distribution.
+            """
+            cache_file = str(self.file.with_suffix(".cache"))
+            config.set_flag(trt.BuilderFlag.INT8)
+            config.int8_calibrator = EngineCalibrator(cache_file, self.args, self.model)
 
         # Free CUDA memory
         del self.model
