@@ -136,6 +136,21 @@ class HGBlock(nn.Module):
         y = self.ec(self.sc(torch.cat(y, 1)))
         return y + x if self.add else y
 
+class RobustConv(nn.Module):
+    # Robust convolution (use high kernel size 7-11 for: downsampling and other layers). Train for 300 - 450 epochs.
+    def __init__(self, c1, c2, k=7, s=1, p=None, g=1, act=True, layer_scale_init_value=1e-6):  # ch_in, ch_out, kernel, stride, padding, groups
+        super(RobustConv, self).__init__()
+        self.conv_dw = Conv(c1, c1, k=k, s=s, p=p, g=c1, act=act)
+        self.conv1x1 = nn.Conv2d(c1, c2, 1, 1, 0, groups=1, bias=True)
+        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones(c2)) if layer_scale_init_value > 0 else None
+
+    def forward(self, x):
+        x = x.to(memory_format=torch.channels_last)
+        x = self.conv1x1(self.conv_dw(x))
+        if self.gamma is not None:
+            x = x.mul(self.gamma.reshape(1, -1, 1, 1)) 
+        return x
+
 
 class SPP(nn.Module):
     """Spatial Pyramid Pooling (SPP) layer https://arxiv.org/abs/1406.4729."""
